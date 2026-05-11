@@ -1,0 +1,7 @@
+{
+  "name": "ff-token-api",
+  "version": "1.0.0",
+  "scripts": {
+    "vercel-build": "echo hello"
+  }
+}
