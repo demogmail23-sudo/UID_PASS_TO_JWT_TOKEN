@@ -1,28 +1,19 @@
 {
   "functions": {
     "api/token.py": {
-      "runtime": "python3.9",
-      "maxDuration": 30
+      "runtime": "python3.9"
     }
   },
   "routes": [
     {
       "src": "/api/(.*)",
       "dest": "/api/token.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/token.py"
     }
   ],
-  "headers": [
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
-      ]
+      "src": "api/token.py",
+      "use": "@vercel/python"
     }
   ]
 }
