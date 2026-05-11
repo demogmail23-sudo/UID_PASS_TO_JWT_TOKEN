@@ -1,12 +1,17 @@
 import requests
 import json
 import base64
-import my_pb2
-import output_pb2
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
+
+# ========== PROTO FILES IMPORT (Tere paas already hain) ==========
+import my_pb2
+import output_pb2
+
+app = Flask(__name__)
+CORS(app)
 
 # ========== CONFIG ==========
 KEY = b'Yg&tc%DEuh6%Zc^8'
@@ -15,17 +20,13 @@ IV = b'6oyZDr22E3ychjM%'
 OAUTH_URL = "https://100067.connect.garena.com/oauth/guest/token/grant"
 MAJOR_LOGIN_URL = "https://loginbp.ggblueshark.com/MajorLogin"
 
-app = Flask(__name__)
-CORS(app)
-
 # ========== ENCRYPTION ==========
 def encrypt_aes(data_bytes):
     cipher = AES.new(KEY, AES.MODE_CBC, IV)
-    from Crypto.Util.Padding import pad
     padded = pad(data_bytes, AES.block_size)
     return cipher.encrypt(padded)
 
-# ========== GUEST LOGIN ==========
+# ========== 1. GET ACCESS TOKEN ==========
 def get_access_token(uid, password):
     payload = {
         'uid': uid,
@@ -44,7 +45,7 @@ def get_access_token(uid, password):
         return data['access_token'], data.get('open_id')
     return None, None
 
-# ========== MAJOR LOGIN (JWT) ==========
+# ========== 2. GET JWT TOKEN (Major Login) ==========
 def get_jwt_token(access_token, open_id):
     headers = {
         "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 9; ASUS_Z01QD Build/PI)",
@@ -94,12 +95,12 @@ def get_jwt_token(access_token, open_id):
                 token = getattr(msg, "token", None)
                 if token:
                     return token
-        except:
+        except Exception as e:
             continue
     
     return None
 
-# ========== DECODE JWT ==========
+# ========== 3. DECODE JWT (Get User Info) ==========
 def decode_jwt(token):
     try:
         payload = token.split('.')[1]
@@ -109,48 +110,72 @@ def decode_jwt(token):
     except:
         return None, None, None
 
-# ========== API ENDPOINTS ==========
+# ========== 4. API ENDPOINTS ==========
+
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({
+        "status": "active",
+        "name": "Free Fire Token Generator API",
+        "version": "2.0.0",
+        "endpoints": {
+            "GET": {
+                "url": "/api/token?uid=UID&pass=PASSWORD",
+                "description": "Get access_token and jwt_token"
+            },
+            "POST": {
+                "url": "/api/token",
+                "body": '{"uid": "123456", "pass": "password"}',
+                "description": "Get tokens using JSON"
+            }
+        },
+        "credit": "@spideyabd | @zainu"
+    })
 
 @app.route('/api/token', methods=['GET', 'POST', 'OPTIONS'])
 def get_tokens():
-    # Handle CORS preflight
+    # Handle CORS
     if request.method == 'OPTIONS':
         return jsonify({}), 200
     
-    # Get parameters
+    # Get credentials
     if request.method == 'GET':
         uid = request.args.get('uid')
         password = request.args.get('pass')
         password = password or request.args.get('password')
     else:
-        uid = request.json.get('uid') if request.is_json else request.form.get('uid')
-        password = request.json.get('pass') if request.is_json else request.form.get('pass')
-        password = password or (request.json.get('password') if request.is_json else request.form.get('password'))
+        if request.is_json:
+            data = request.get_json()
+            uid = data.get('uid')
+            password = data.get('pass') or data.get('password')
+        else:
+            uid = request.form.get('uid')
+            password = request.form.get('pass')
     
     # Validate
     if not uid or not password:
         return jsonify({
-            'success': False,
-            'error': 'UID and Password required',
-            'usage': {
-                'GET': '/api/token?uid=123456&pass=yourpassword',
-                'POST': '{"uid": "123456", "pass": "yourpassword"}'
+            "success": False,
+            "error": "UID and Password required",
+            "example": {
+                "GET": "/api/token?uid=123456&pass=yourpassword",
+                "POST": '{"uid": "123456", "pass": "yourpassword"}'
             }
         }), 400
     
-    # Get tokens
+    # Step 1: Get Access Token
     access_token, open_id = get_access_token(uid, password)
     
     if not access_token:
         return jsonify({
-            'success': False,
-            'error': 'Invalid UID or Password'
+            "success": False,
+            "error": "Invalid UID or Password. Please check your credentials."
         }), 401
     
-    # Get JWT
+    # Step 2: Get JWT Token
     jwt_token = get_jwt_token(access_token, open_id)
     
-    # Decode info if JWT available
+    # Step 3: Decode info if JWT available
     uid_from_jwt = None
     name = None
     region = None
@@ -159,44 +184,30 @@ def get_tokens():
         uid_from_jwt, name, region = decode_jwt(jwt_token)
     
     response_data = {
-        'success': True,
-        'credit': '@I MAX DEVELOPER | @ZAINUBHAI',
-        'data': {
-            'uid': uid_from_jwt or uid,
-            'name': name,
-            'region': region,
-            'access_token': access_token,
-            'jwt_token': jwt_token,
-            'open_id': open_id
+        "success": True,
+        "credit": "@spideyabd",
+        "developer": "@zainu",
+        "tokens": {
+            "access_token": access_token,
+            "jwt_token": jwt_token,
+            "open_id": open_id
+        },
+        "player_info": {
+            "uid": uid_from_jwt or uid,
+            "name": name,
+            "region": region
         }
     }
     
     return jsonify(response_data), 200
 
 @app.route('/api/health', methods=['GET'])
-def health():
+def health_check():
     return jsonify({
-        'status': 'active',
-        'credit': '@I MAX DEVELOPER',
-        'version': '1.0.0'
+        "status": "healthy",
+        "timestamp": "2026-05-11"
     }), 200
 
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({
-        'name': 'Free Fire Token Generator API',
-        'endpoints': {
-            'GET /api/token': '?uid=123&pass=xxx',
-            'POST /api/token': '{"uid":"123","pass":"xxx"}',
-            'GET /api/health': 'Health check'
-        },
-        'credit': '@I MAX DEVELOPER'
-    }), 200
-
-# Vercel handler
-def handler(event, context):
-    return app(event, context)
-
-# Local testing
+# ========== RUN ==========
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
